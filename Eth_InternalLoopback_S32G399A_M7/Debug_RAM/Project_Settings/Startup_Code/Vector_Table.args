@@ -1,0 +1,22 @@
+-c
+-I../RTD/include
+-I"C:/Users/sh970/workspaceS32DS.3.5/Eth_InternalLoopback_S32G399A_M7/generate/include"
+-I"C:/Users/sh970/workspaceS32DS.3.5/Eth_InternalLoopback_S32G399A_M7/RTD/include"
+-I"C:/Users/sh970/workspaceS32DS.3.5/Eth_InternalLoopback_S32G399A_M7/board"
+-I"C:/Users/sh970/workspaceS32DS.3.5/Eth_InternalLoopback_S32G399A_M7/include"
+-I"C:/NXP/S32DS.3.5/S32DS/software/PlatformSDK_S32XX_4_0_0/RTD/BaseNXP_TS_T40D11M40I2R0/header"
+-I"C:/NXP/S32DS.3.5/S32DS/software/PlatformSDK_S32XX_4_0_0/RTD/BaseNXP_TS_T40D11M40I2R0/include"
+-I"C:/NXP/S32DS.3.5/S32DS/software/PlatformSDK_S32XX_4_0_0/RTD/Platform_TS_T40D11M40I2R0/include"
+-I"C:/NXP/S32DS.3.5/S32DS/software/PlatformSDK_S32XX_4_0_0/RTD/Platform_TS_T40D11M40I2R0/startup/include"
+-I"C:/Users/sh970/workspaceS32DS.3.5/Eth_InternalLoopback_S32G399A_M7/generate/include"
+-I"C:/Users/sh970/workspaceS32DS.3.5/Eth_InternalLoopback_S32G399A_M7/generate/src"
+-x assembler-with-cpp
+-g3
+-mcpu=cortex-m7
+-mthumb
+-mlittle-endian
+-mfloat-abi=hard
+-mfpu=fpv5-sp-d16
+-specs=nano.specs
+-specs=nosys.specs
+--sysroot="C:/NXP/S32DS.3.5/S32DS/build_tools/gcc_v9.2/gcc-9.2-arm32-eabi/arm-none-eabi/newlib"

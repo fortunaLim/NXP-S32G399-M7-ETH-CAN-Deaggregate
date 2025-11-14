@@ -1,27 +1,14 @@
 /*
 *   (c) Copyright 2020 NXP
-*
-*   NXP Confidential. This software is owned or controlled by NXP and may only be used strictly
-*   in accordance with the applicable license terms.  By expressly accepting
-*   such terms or by downloading, installing, activating and/or otherwise using
-*   the software, you are agreeing that you have read, and that you agree to
-*   comply with and are bound by, such license terms.  If you do not agree to
-*   be bound by the applicable license terms, then you may not retain,
-*   install, activate or otherwise use the software.
-*
-*   This file contains sample code only. It is not part of the production code deliverables.
+*   Modified for ISR optimization - RX processing moved to task
 */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-
 /*==================================================================================================
 *                                        INCLUDE FILES
-* 1) system and project includes
-* 2) needed interfaces from external units
-* 3) internal and external interfaces from this unit
 ==================================================================================================*/
 #include "Mcu.h"
 #include "Port.h"
@@ -39,12 +26,16 @@ extern "C" {
 #include "Dio_Cfg.h"
 #include "Gpt.h"
 #include "FlexCAN_Ip.h"
+#include "Gmac_Ip_Device_Registers.h"
+#include "Gmac_Ip_Features.h"
 
-/*
-#include "Siul2_Port_Ip.h"
-#include "Siul2_Dio_Ip.h"
-#include "Siul2_Port_Ip_Cfg.h"
-*/
+#ifdef USING_OS_FREERTOS
+#include "FreeRTOS.h"
+#include "task.h"
+#include "queue.h"
+#include "semphr.h"
+#endif
+
 /*==================================================================================================
 *                          LOCAL TYPEDEFS (STRUCTURES, UNIONS, ENUMS)
 ==================================================================================================*/
@@ -60,237 +51,81 @@ extern "C" {
 
 #define ETH_BUFFER_INDEX_UNUSED     (0U)
 
-
-/* PTP */
-#define Typ_PTP                             0x88F7
-#define IEEE1588v2                          0x02
-#define Sync                                0x0
-#define Delay_Req                           0x1
-#define Pdelay_Req                          0x2
-#define Pdelay_Resp                         0x3
-#define Follow_Up                           0x8
-#define Delay_Res                           0x9
-#define Pdelay_Resp_Follow_Up               0xa
-#define Announce                            0xb
-#define Signaling                           0xc
-
-/*==================================================================================================
-*                                       LOCAL MACROS
-==================================================================================================*/
-
-/*==================================================================================================
-*                                      LOCAL CONSTANTS
-==================================================================================================*/
-
-/********************** Address For MAC  **********************/
-//pdelay mac?   {0x01, 0x80, 0xC2, 0x00, 0x00, 0x0E};
-//PTP MAC : (ra6m3) {0x00, 0x1B, 0x19, 0x01, 0x02, 0x03};
-uint8                     PTP_Des_MAC[6]                    = {0x01, 0x1b, 0x19, 0x00, 0x00, 0x00};
-//uint8_t                     PTP_Des_MAC[6]                    = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55};
-
-const uint8                     Master_ClockID[8] = {0x01, 0x1b, 0x19, 0xFF, 0xFE, 0x01, 0x02, 0x03}; // PTP Local Clock ID
-const uint8                     Slave_ClockID[8]  = {0x01, 0x1b, 0x19, 0xFF, 0xFE, 0x04, 0x05, 0x06}; // PTP Local Clock ID
-
-const uint8                     Master_PortNum[2] = {0x00, 0x01}; // PTP Local PortNum
-const uint8                     Slave_PortNum[2]  = {0x00, 0x02}; // PTP Local PortNum
-
-uint8                     PTP_VLAN_TYPE[2] = {0x81, 0x00};
-
-uint16_t                    Master_Sync_Sequence = 0;
-uint16_t                    Master_Resp_Sequence = 0;
-uint16_t                    Slave_Sequence = 0;
+// ==================== �߰�: RX ���� Ǯ ���� ====================
+#define RX_BUFFER_POOL_SIZE    64    // RX ���� Ǯ ũ��
+#define MAX_FRAME_SIZE         1536  // �ִ� �̴��� ������ ũ��
 
 /*==================================================================================================
 *                                      LOCAL VARIABLES
 ==================================================================================================*/
-
-typedef enum {
-    INITIALIZING,
-    MASTER_CLOCK_SELECTED,
-    SYNCHRONIZING,
-    FOLLOW_UP,
-	DELAY_REQ,
-	DELAY_RESP,
-    ERROR_STATE
-} PTP_MasterState;
-
-PTP_MasterState currentState = INITIALIZING;
+uint8 Gmac_0_MacAddr[6U] = {0x00,0x1b,0x19,0x00,0x00,0x00};
 
 
-typedef struct _Ptp_PayloadTpye{
-
-    /////////////////////////////////////////
-    /** IEEE 1588v2 Layer (PTP version 2) **/
-    /////////////////////////////////////////
-
-    uint8                 MsgType         : 4;
-    uint8                 trans_Spec      : 4;
-    uint8                 versionPTP      : 4;
-    uint8                 Reserved_a      : 4;
-    uint8                 MsgLength[2];
-    uint8                 DomainNumber;
-    uint8                 Reserved_b;
-    uint8                 flags[2];
-    uint8                 correctField[8];
-    uint8                 Reserved_c[4];
-    uint8                 SrcClockID[8]; //???
-    uint8                 SrcPortNum[2];
-    uint8                 SequenceID[2];
-    uint8                 ControlField;
-    uint8                 LogMsgInterval;
-
-    uint8                 orgTimeStamp_sec[6];
-    uint8                 orgTimeStamp_nano[4];
-
-    uint8			   	  Slave_ClockID[8];
-	uint8 				  Slave_PortNum[2];
-    uint8                 Padding[8];
-
-    /////////////////////////////////////////
-    /** Delay_Response (Extra Frame) **/
-    /////////////////////////////////////////
-
-    //uint8_t             req_Src_PortIdentity[ETH_HEAD_SIZE_6B];
-    uint8                 req_Src_PortId[2];
-
-}Ptp_PayloadTpye;
-
-
-Ptp_PayloadTpye PTP_SYNC_Frame, PTP_RESP_Frame, PTP_Fallow_Frame;
-
-QueueType PTP_Queue;
-
-/**************************************************************************/
-// Vlan
-/**************************************************************************/
-//Eth_Vlan_setting();
 Gmac_Ip_VlanConfigType gmac_0_vlanConfig =
 {
-	/* .enDoubleVlan = */ TRUE,
-	/* .enSvlan = */ FALSE,
-	/* .outerVlanIns = */ GMAC_VLAN_TAG_INSERTION,//GMAC_VLAN_TAG_NO_CONTROL
-	/* .innerVlanIns = */ GMAC_VLAN_TAG_INSERTION,
-	/* .outerVlanStrip = */ GMAC_VLAN_TAG_DO_NOT_STRIP,
-	/* .innerVlanStrip = */ GMAC_VLAN_TAG_DO_NOT_STRIP,
+	/* .EnDoubleVlan = */ TRUE,
+	/* .EnSvlan = */ FALSE,
+	/* .OuterVlanIns = */ GMAC_VLAN_TAG_INSERTION,
+	/* .InnerVlanIns = */ GMAC_VLAN_TAG_NO_CONTROL,
+	/* .OuterVlanStrip = */ GMAC_VLAN_TAG_DO_NOT_STRIP,
+	/* .InnerVlanStrip = */ GMAC_VLAN_TAG_DO_NOT_STRIP,
 };
 
 Gmac_Ip_VlanRxFilterType gmac_0_vlanRxFilterConfig = {
-/* .enInnerVlanMatch = */ FALSE,
-/* .enSvlanMatch = */ FALSE,
-/* .disVlanTypeMatch = */ FALSE,
-/* .enInverseMatch = */ FALSE,
-/* .en12bitMatch = */ TRUE,
+    /* .EnInnerVlanMatch = */ FALSE,
+    /* .EnSvlanMatch = */ FALSE,
+    /* .DisVlanTypeMatch = */ FALSE,
+    /* .EnInverseMatch = */ FALSE,
+    /* .En12bitMatch = */ TRUE,
 };
 
-/*==================================================================================================
-*                                      GLOBAL CONSTANTS
-==================================================================================================*/
+// ==================== �߰�: RX ó���� ����ü �� ���� ====================
+typedef struct {
+    uint8 FrameData[MAX_FRAME_SIZE];
+    uint16 FrameLength;
+    uint8 CtrlIdx;
+    uint8 FifoIdx;
+} EthRxFrameBuffer_t;
 
+// Bare metal �� ����
+static EthRxFrameBuffer_t rxBufferPool[RX_BUFFER_POOL_SIZE];
+static volatile uint16 rxBufferWriteIdx = 0;
+static volatile uint16 rxBufferReadIdx = 0;
+static volatile uint32 rxIsrCount = 0;
+static volatile uint32 rxProcessedCount = 0;
+static volatile uint32 rxDroppedCount = 0;
 
-/*==================================================================================================
-*                                      GLOBAL VARIABLES
-==================================================================================================*/
 extern uint8 eth_rcv;
+
 /*==================================================================================================
 *                                   LOCAL FUNCTION PROTOTYPES
 ==================================================================================================*/
+void Eth_Receive_SKKU(uint8 CtrlIdx, uint8 FifoIdx, Eth_RxStatusType *RxStatusPtr, uint8 **R_FrameData);
+void Eth_Local_Memcpy(uint8 *Dst, const uint8 *Src, uint32 BytesNum);
+void FlexCAN_init_SKKU(void);
 
+// ���ο� �Լ���
+static void ProcessReceivedFrame(const EthRxFrameBuffer_t *frameBuffer);
+static void Eth_RxProcessPoll(void);
 
 /*==================================================================================================
-*                                       LOCAL FUNCTIONS
+*                                       MAIN FUNCTION
 ==================================================================================================*/
-void Eth_Receive_SKKU(uint8 CtrlIdx,
-                 uint8 FifoIdx,
-                 Eth_RxStatusType *RxStatusPtr,
-				 uint8 **R_FrameData
-                );
-
-void Ptp_MakeFrame(uint8 mode, // master, slave
-                 uint8 msg_format, // sync, delay_req, pdelay_req...... etc
-				 uint8 **BufPtr
-                );
-
-void runPTPMasterStateMachine(
-
-				);
+extern const Mcu_ConfigType Mcu_Config;
+extern const Port_ConfigType Port_Config;
 
 void initializeSystem();
-void selectMasterClock();
-void sendSynchronization();
-void sendFollowUp();
-void recvDealyReq();
-void sendDelayResp();
-void handleError();
-void Total_time(uint64 * total_time ,uint32 sec, uint32 nano_sec);
-void PTP_init();
-void Print_IO();
-void FlexCAN_init_SKKU(void);
-void Eth_Local_Memcpy(uint8 *Dst, const uint8 *Src, uint32 BytesNum);
-/*==================================================================================================
-*                                       GLOBAL FUNCTIONS
-==================================================================================================*/
-void Eth_RxIrqCallback_SKKU(const uint8 CtrlIdx, const uint8 DMAChannel);
+void runPTPMasterStateMachine();
 
-/*==================================================================================================
-*
-==================================================================================================*/
-/**
-* @brief        Transmit & receive in internal loopback mode
-* @details      
-*/
-Eth_RxStatsType RxStatus;
-Eth_BufIdxType BufferIndex, BufferIndex_RESP, BufferIndex_SYNC;
-uint8 *PayloadBuffer;
-uint8 *PayloadBuffer_RESP;
-uint8 *RxBuffer;
-uint16 PayloadLength = 46U;
-uint8 Gmac_0_MacAddr[6U] = {0x01,0x1b,0x19,0x00,0x00,0x00};
-//uint8 Gmac_0_MacAddr[6U] = {0x01,0x02,0x03,0x04,0x05,0x06};
 Eth_RxStatusType Status;
-boolean Pass = TRUE;
-int i, a;
-char *measage = "Hello Ethernet!!!";
-Eth_TimeStampQualType TimeQualPtr, TimeQualCurrent;
-Eth_TimeStampType TimeStampPtr, Time_Current, TimeStampCurrent2, TimeStampRESP, TimeStampSYNC;
-volatile Eth_TimeStampType SW_Time;
-sint64 Offset_array1[1000] = {0};
-uint32 Offset_sec[1000] = {0};
-uint32 Offset_nanosec[1000] = {0};
-uint32 Offset_sec1[1000] = {0};
-uint32 Offset_nanosec1[1000] = {0};
-uint32 Offset_sec2[1000] = {0};
-uint32 Offset_nanosec2[1000] = {0};
-uint32 Offset_sec3[1000] = {0};
-uint32 Offset_nanosec3[1000] = {0};
-uint8 sig_toggle = 0x01U;
-uint8 sig_toggle2 = 0x01U;
+uint8 *RxBuffer;
 
-extern GMAC_Type * const Gmac_apxBases[FEATURE_GMAC_NUM_INSTANCES];
-extern Gmac_Ip_StateType *Gmac_apxState[FEATURE_GMAC_NUM_INSTANCES];
-extern Gmac_Ip_BufferDescriptorType *TxCurrentDesc[FEATURE_GMAC_NUM_CHANNELS]; /*!< The current available transmit buffer descriptor pointer array. */
-extern Gmac_Ip_ChannelType * const Gmac_apxChBases[FEATURE_GMAC_NUM_INSTANCES][FEATURE_GMAC_NUM_CHANNELS];
-
-uint32 status_monitor;
-uint8 PTP_next_state;
-uint32 Sec_Old=0;
-uint32 send_count=0;
-uint32 ttt=0;
-sint64 PTP_Current;
-volatile uint32 ptp_count_ref, ptp_count;
-volatile uint8 PTP_Lock=0;
-
-void Gpt_PitNotification(void)
-{
-	Dio_WriteChannel(DioConf_DioChannel_DioChannel_0, sig_toggle);
-	sig_toggle ^= 0xff;
-}
-
-int main(void) 
+int main(void)
 {
 	Eth_TimeStampType Time_Current_in;
 
   	OsIf_Init(NULL_PTR);
-    
+
     /* Initialize all pins using the Port driver */
     Port_Init(NULL_PTR);
  	//Siul2_Port_Ip_Init(NUM_OF_CONFIGURED_PINS0, g_pin_mux_InitConfigArr0);
@@ -300,14 +135,14 @@ int main(void)
 
     /* Initialize the clock tree and apply PLL as system clock */
     Mcu_InitClock(McuClockSettingConfig_0);
-    
+
     while ( MCU_PLL_LOCKED != Mcu_GetPllStatus() )
     {
         /* Busy wait until the System PLL is locked */
     }
 
     Mcu_DistributePllClock();
-    
+
     Mcu_SetMode(McuModeSettingConf_0);
 
     Platform_Init(NULL_PTR);
@@ -318,108 +153,187 @@ int main(void)
 
     Eth_SetControllerMode(EthConf_EthCtrlConfig_EthCtrlConfig_0, ETH_MODE_ACTIVE);
 
-    //Gmac_Ip_EnableVlan(EthConf_EthCtrlConfig_EthCtrlConfig_0, &gmac_0_vlanConfig);
-    //initializeSystem();
+    /* Configure VLAN */
+    Gmac_Ip_EnableVlan(EthConf_EthCtrlConfig_EthCtrlConfig_0, &gmac_0_vlanConfig);
+    Gmac_Ip_SetTxOuterVlanTagForInsertion(EthConf_EthCtrlConfig_EthCtrlConfig_0,
+                                           0U,
+                                           GMAC_VLAN_TYPE_C_VLAN,
+										   0x1309U
+										   );
 
-
-/***********************************
-   Use GPT when Software Mode
- ***********************************/
-
-    GMAC_Type *Base;
-    Gmac_Ip_BufferDescriptorType *Bd;
-    Base = Gmac_apxBases[0];
-   // Bd = Gmac_apxChBases[0][0];//Gmac_apxState[0]->TxCurrentDesc[0];
-    Bd = Gmac_apxState[0]->TxCurrentDesc[0];
-
-/***********************************
-   Offload SYNC trig on
- ***********************************/
-
-
-/***********************************
-   Main Loop
- ***********************************/
 
     for(;;)
     {
-
-
+        // Bare metal: ���� ������� RX ó��
+        Eth_RxProcessPoll();
     }
     return 0;
 }
 
-
-/***********************************
-   Software Mode
- ***********************************/
-// Gmac_Ip_PBcfg.c -> GMAC_0_aRxRingConfigPB -> Eth_RxIrqCallback_SKKU();
+/*==================================================================================================
+*                                   RX INTERRUPT CALLBACK (�淮ȭ)
+==================================================================================================*/
 Flexcan_Ip_MsgBuffType rxFifoData, txData, txData1, txData2, txData3;
 
 Flexcan_Ip_DataInfoType tx_info = {
-		.msg_id_type = FLEXCAN_MSG_ID_STD,
-		.data_length = 8u,
-		.fd_enable = FALSE,
-		.fd_padding = FALSE,
-		.enable_brs = FALSE,
-		.is_polling = FALSE,
-		.is_remote = FALSE
-	};
+    .msg_id_type = FLEXCAN_MSG_ID_STD,
+    .data_length = 8u,
+    .fd_enable = FALSE,
+    .fd_padding = FALSE,
+    .enable_brs = FALSE,
+    .is_polling = FALSE,
+    .is_remote = FALSE
+};
 
 volatile uint32 counter;
 uint8 TX_MB_IDX;
+uint8 sig_toggle = 0x01U;
 
-
-void Eth_RxIrqCallback_SKKU(const uint8 CtrlIdx, const uint8 DMAChannel)
+void Gpt_PitNotification(void)
 {
-	//uint8 ii=0;
-	uint8 dummyData_E2C[8] = {0x0};
-	uint32 index_temp;
-	uint16 CAN_i,CAN_j ;
-	uint16 CAN_MSG_ID = 0;
-	uint8 CAM_MSG_LEN = 0;
-	uint8 PDU_num_Tx = 0;
-	uint32 CAN_msg_index = 18;
-	uint8 Gmac_0_MacAddr[6U] = {0x01,0x1b,0x19,0x00,0x00,0x00};
-	Eth_BufIdxType BufferIndex2, BufferIndex_RX;
-	uint8 *PayloadBuffer2;
-
-	Eth_Receive_SKKU(EthConf_EthCtrlConfig_EthCtrlConfig_0, 0U, &Status, &RxBuffer);
-
-	CAN_msg_index = 12;
-	PDU_num_Tx = RxBuffer[CAN_msg_index];
-	CAN_msg_index++;
-
-	for(CAN_i=0;CAN_i<PDU_num_Tx;CAN_i++)
-	{
-		Eth_ProvideTxBuffer(EthConf_EthCtrlConfig_EthCtrlConfig_0, 1U, &BufferIndex2, &PayloadBuffer2, 32U);
-
-		CAN_MSG_ID  = (RxBuffer[CAN_msg_index]>>4) | RxBuffer[CAN_msg_index+1]<<4;
-		CAM_MSG_LEN = RxBuffer[CAN_msg_index] & 0xf;
-		RxBuffer[CAN_msg_index] = CAN_MSG_ID;
-		CAN_msg_index = CAN_msg_index + 2;
-
-		index_temp = CAN_msg_index;
-
-		for(CAN_msg_index; CAN_msg_index<index_temp+CAM_MSG_LEN; CAN_msg_index++)
-		{
-			dummyData_E2C[CAN_msg_index-index_temp] = RxBuffer[CAN_msg_index];
-		}
-
-		//memcpy(&dummyData_E2C[CAN_msg_index], &bd.Data[CAN_msg_index], CAM_MSG_LEN);
-		//CAN_msg_index = CAN_msg_index+CAM_MSG_LEN;
-		tx_info.data_length = CAM_MSG_LEN;
-
-		//FlexCAN_Ip_SendBlocking(0U, TX_MB_IDX, &tx_info, CAN_MSG_ID, (uint8 *)&dummyData_E2C, 10000);
-		//FlexCAN_Ip_AbortTransfer(0U, TX_MB_IDX);
-		//TX_MB_IDX = 8+(TX_MB_IDX+1)%8;
-		PayloadBuffer2[0] = CAN_MSG_ID;
-		Eth_Local_Memcpy(&PayloadBuffer2[1], &RxBuffer[index_temp], 2+CAM_MSG_LEN);
-		Eth_Transmit(EthConf_EthCtrlConfig_EthCtrlConfig_0, BufferIndex2, (Eth_FrameType)0x0A0CU, FALSE, 55U, Gmac_0_MacAddr);
-	}
+	Dio_WriteChannel(DioConf_DioChannel_DioChannel_0, sig_toggle);
+	sig_toggle ^= 0xff;
 }
 
-/*================================================================================================*/
+
+// ==================== �ٽ� ����: ISR�� �ּ����� �۾��� ====================
+void Eth_RxIrqCallback_SKKU(const uint8 CtrlIdx, const uint8 DMAChannel)
+{
+    Eth_RxStatusType status;
+    uint8 *frameData = NULL;
+
+    rxIsrCount++;
+
+    // 1. ������ ������ ���� (�ϵ���� ���� ����)
+    Eth_Receive_SKKU(CtrlIdx, 0U, &status, &frameData);
+
+    if (status != ETH_NOT_RECEIVED && frameData != NULL)
+    {
+
+        // Bare metal: �� ���ۿ� ����
+        uint16 nextWriteIdx = (rxBufferWriteIdx + 1) % RX_BUFFER_POOL_SIZE;
+
+        if (nextWriteIdx != rxBufferReadIdx)  // ���� �����÷ο� üũ
+        {
+            rxBufferPool[rxBufferWriteIdx].CtrlIdx = CtrlIdx;
+            rxBufferPool[rxBufferWriteIdx].FifoIdx = 0U;
+
+            // �ּ����� ������ ����
+            uint16 copyLen = MAX_FRAME_SIZE;
+            Eth_Local_Memcpy(rxBufferPool[rxBufferWriteIdx].FrameData, frameData, copyLen);
+            rxBufferPool[rxBufferWriteIdx].FrameLength = copyLen;
+
+            rxBufferWriteIdx = nextWriteIdx;
+        }
+        else
+        {
+            rxDroppedCount++;  // ���� ���� ��
+        }
+    }
+
+    // ISR ���� - ���⼭�� ������ ó�� �� ��!
+}
+
+
+/*==================================================================================================
+*                              RX ó�� ���� (Bare Metal)
+==================================================================================================*/
+static void Eth_RxProcessPoll(void)
+{
+    // �� ���ۿ� �����Ͱ� ������ ó��
+    while (rxBufferReadIdx != rxBufferWriteIdx)
+    {
+        rxProcessedCount++;
+
+        // ���� ������ ó��
+        ProcessReceivedFrame(&rxBufferPool[rxBufferReadIdx]);
+
+        // �б� �ε��� ����
+        rxBufferReadIdx = (rxBufferReadIdx + 1) % RX_BUFFER_POOL_SIZE;
+    }
+}
+
+
+#if 1
+// 상단 공통 위치에 추가 (보낸쪽과 맞추기)
+#define ETHERTYPE_CONTAINER  0x0A0B  // 수신(집약) 프레임
+#define ETHERTYPE_DEAGG      0x0A0C  // 재전송(분해) 프레임
+#define GW_CONTAINER_VERSION 0x01
+#define GW_CONTAINER_HDR_SIZE 2u      // Version(1) + Count(1)
+#define GW_IPDU_HDR_SIZE      3u      // PduId(2) + Len(1)
+
+static inline uint16 ReadBE16(const uint8 *p) { return (uint16)((p[0] << 8) | p[1]); }
+
+// RX 처리 핵심: 컨테이너 → 개별 프레임
+static void ProcessReceivedFrame(const EthRxFrameBuffer_t *frameBuffer)
+{
+    const uint8  *payload = frameBuffer->FrameData;   // ★ 위 1) 수정 덕분에 'payload' 시작이 들어있음
+    uint16        payLen  = frameBuffer->FrameLength; // 드라이버가 준 payload 길이(ETH 헤더 제외)
+    Eth_BufIdxType  txIdx;
+    uint8         *txBuf;
+    uint16         txBufLen;
+
+    // 1) 컨테이너 최소 길이 점검
+    if (payLen < GW_CONTAINER_HDR_SIZE) return;
+
+    // (선택) EtherType 필터링을 payload 이전에서 하고 싶다면
+    // Eth_Receive_SKKU()에서 EtherType도 함께 넘기도록 확장하면 좋음.
+    // 여기서는 Version/Count로만 판단.
+    uint8 version = payload[0];
+    uint8 count   = payload[1];
+    if (version != GW_CONTAINER_VERSION) return;
+
+    uint16 pos = GW_CONTAINER_HDR_SIZE;
+
+    // 2) Count 만큼 파싱 (오버런 방지 철저)
+    for (uint8 i = 0; i < count; i++) {
+        if (pos + GW_IPDU_HDR_SIZE > payLen) break; // 헤더 모자람
+        uint16 pduId = ReadBE16(&payload[pos]);     // 2B
+        uint8  len   = payload[pos + 2];            // 1B
+        pos += GW_IPDU_HDR_SIZE;
+
+        if (pos + len > payLen) break;              // Payload 모자람
+
+        // 3) 송신 버퍼 획득 (우선 FIFO1로; 필요시 TC→FIFO 매핑 적용)
+        txBufLen = 1518; // 최대 페이로드 가능치 요청
+        if (Eth_ProvideTxBuffer(EthConf_EthCtrlConfig_EthCtrlConfig_0,
+                                1U,       // Tx Ring 1(예: VLAN Priority 1)
+                                &txIdx,
+                                &txBuf,
+                                &txBufLen) != E_OK) {
+            // 버퍼 부족 → 이번 서브PDU는 드롭 (로그만)
+            continue;
+        }
+
+        // 4) 새 프레임 페이로드 구성: [PduId(2B) | Len(1B) | Payload(len)]
+        // 드라이버는 MAC/VLAN/Type를 알아서 붙이므로 여기엔 페이로드만 복사
+        txBuf[0] = (uint8)(pduId >> 8);
+        txBuf[1] = (uint8)(pduId & 0xFF);
+        txBuf[2] = len;
+        // 데이터 복사
+        Eth_Local_Memcpy(&txBuf[3], &payload[pos], len);
+
+        uint16 txLen = (uint16)(GW_IPDU_HDR_SIZE + len); // 우리가 보낼 페이로드 총길이
+
+        // 5) 전송 (EtherType=0x0A0C). VLAN/우선순위는 컨트롤러 설정에 따름
+        (void)Eth_Transmit(EthConf_EthCtrlConfig_EthCtrlConfig_0,
+                           txIdx,
+                           (Eth_FrameType)ETHERTYPE_DEAGG,
+                           TRUE,            // TxConfirmation on
+                           txLen,           // 페이로드 길이
+                           Gmac_0_MacAddr   // Src MAC
+                           );
+
+        // 6) 다음 서브 PDU로
+        pos += len;
+    }
+}
+#endif
+
+
+/*==================================================================================================
+*                                   HELPER FUNCTIONS
+==================================================================================================*/
 void Eth_Receive_SKKU(uint8 CtrlIdx,
                  uint8 FifoIdx,
                  Eth_RxStatusType *RxStatusPtr,
@@ -507,11 +421,10 @@ void Eth_Receive_SKKU(uint8 CtrlIdx,
 #endif /* ETH_DEV_ERROR_DETECT  */
 }
 
+
 void Eth_Local_Memcpy(uint8 *Dst, const uint8 *Src, uint32 BytesNum)
 {
-    uint8 TempVar = BytesNum;
-
-    /* Start copy data*/
+    uint32 TempVar = BytesNum;
     while (TempVar > 0U)
     {
         TempVar--;
@@ -521,40 +434,14 @@ void Eth_Local_Memcpy(uint8 *Dst, const uint8 *Src, uint32 BytesNum)
 
 void FlexCAN_init_SKKU(void)
 {
-	GMAC_Type *Base;
+    GMAC_Type *Base;
+    uint8 dummyData[8] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+   // Base = Gmac_apxBases[0];
 
-	uint8 dummyData[8] = {0xff,0xff,0xff,0xff,0xff,0xff,0xff};
-	Base = Gmac_apxBases[0];
-    /*NVIC_SetPriority(CAN0_ORED_0_7_MB_IRQn, configMAX_SYSCALL_INTERRUPT_PRIORITY);
-    NVIC_EnableIRQ(CAN0_ORED_0_7_MB_IRQn);*/
-
-	FlexCAN_Ip_Init(INST_FLEXCAN_0, &FlexCAN_State0, &FlexCAN_Config0);
-
-	//FlexCAN_Ip_ConfigEnhancedRxFifo_Privileged(INST_FLEXCAN_0, &CAN0_EnhanceFIFO_IdFilterTable[0]);
-	//FlexCAN_Ip_ConfigRxFifo(0, FLEXCAN_RX_FIFO_ID_FORMAT_A, &CAN0_FIFO_IdFilterTable[2]);
-
-	//FlexCAN_Ip_SetRxMaskType_Privileged(INST_FLEXCAN_0,FLEXCAN_RX_MASK_INDIVIDUAL);
-	//FlexCAN_Ip_SetRxIndividualMask_Privileged(INST_FLEXCAN_0,1,0x1FFFFFFF);
-	//FlexCAN_Ip_SetRxIndividualMask_Privileged(INST_FLEXCAN_0,2,0x1FFFFFFF);
-
-    //FlexCAN_Ip_ConfigRxMb(INST_FLEXCAN_0, RX_MB_IDX, &rx_info, 0x1);
-    //FlexCAN_Ip_ConfigRxMb(INST_FLEXCAN_0, 2, &rx_info, 0x2);
-
-	FlexCAN_Ip_SetStartMode(INST_FLEXCAN_0);
-
-    //FlexCAN_Ip_Receive(INST_FLEXCAN_0, RX_MB_IDX, &rxData, false);
-    //FlexCAN_Ip_Receive(INST_FLEXCAN_0, 2, &rxData, false);
-    //FlexCAN_Ip_RxFifo(INST_FLEXCAN_0, &rxFifoData);
-
-    //FlexCAN_Ip_SendBlocking(0, 8, &tx_info, 20U, (uint8 *)&dummyData, 10000);
-
+    FlexCAN_Ip_Init(INST_FLEXCAN_0, &FlexCAN_State0, &FlexCAN_Config0);
+    FlexCAN_Ip_SetStartMode(INST_FLEXCAN_0);
 }
-
-
-
 
 #ifdef __cplusplus
 }
 #endif
-
-/** @} */

@@ -175,7 +175,7 @@ static const Eth_IngressCfgType Eth_aIngressConfigPB[1U] =
 {
     /* The configuration structure for Eth_aIngressConfigPB_[0U] - GMAC_0 */
     {
-        256U,  /* Total number of buffers across all Rx FIFOs */
+        128U,  /* Total number of buffers across all Rx FIFOs */
         1U /* Total number of configured Rx FIFOs */
     }
 };

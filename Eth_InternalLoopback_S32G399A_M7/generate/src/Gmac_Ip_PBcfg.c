@@ -104,7 +104,7 @@ extern "C"{
 #include "Eth_MemMap.h"
 
 /*! @brief Channel callbacks external declarations */
-extern void Eth_RxIrqCallback_SKKU(uint8 instance, uint8 channel);
+extern void Eth_RxIrqCallback(uint8 instance, uint8 channel);
 extern void Eth_TxIrqCallback(uint8 instance, uint8 channel);
 
 #define ETH_STOP_SEC_CODE
@@ -143,7 +143,7 @@ extern Gmac_Ip_StateType GMAC_0_StateStructure;
 
 
 /*! @brief The MAC address(es) of the configured controller(s) */
-static const uint8 GMAC_0_au8MacAddrPB[GMAC_MAC_ADDR_LENGTH] = { 0x00U, 0x11U, 0x22U, 0x33U, 0x44U, 0x55U };
+static const uint8 GMAC_0_au8MacAddrPB[GMAC_MAC_ADDR_LENGTH] = { 0x00U, 0x11U, 0x22U, 0x33U, 0x44U, 0x44U };
 
 /*! @brief Reception ring configuration structures */
 static const Gmac_Ip_RxRingConfigType GMAC_0_aRxRingConfigPB[1U] =
@@ -151,11 +151,11 @@ static const Gmac_Ip_RxRingConfigType GMAC_0_aRxRingConfigPB[1U] =
     /* The configuration structure for Rx Ring 0 */
     {
         /*.ringDesc = */GMAC_0_RxRing_0_DescBuffer,
-        /*.callback = */Eth_RxIrqCallback_SKKU,
+        /*.callback = */Eth_RxIrqCallback,
         /*.buffer = */GMAC_0_RxRing_0_DataBuffer,
         /*.interrupts = */(uint32)GMAC_CH_INTERRUPT_RI,
-        /*.bufferLen = */1456U,
-        /*.ringSize = */256U,
+        /*.bufferLen = */1536U,
+        /*.ringSize = */128U,
         /*.priorityMask = */0U,
         /*.dmaBurstLength = */64U
     }
@@ -175,7 +175,7 @@ static const Gmac_Ip_TxRingConfigType GMAC_0_aTxRingConfigPB[1U] =
         /*.callback = */Eth_TxIrqCallback,
         /*.buffer = */GMAC_0_TxRing_0_DataBuffer,
         /*.interrupts = */(uint32)GMAC_CH_INTERRUPT_TI,
-        /*.bufferLen = */512U,
+        /*.bufferLen = */1536U,
         /*.ringSize = */4U,
         /*.priorityMask = */0U,
         /*.dmaBurstLength = */64U,
@@ -199,7 +199,7 @@ static const Gmac_Ip_ConfigType GMAC_0_InitConfigPB =
     /*.speed = */GMAC_SPEED_1G,
     /*.duplex = */GMAC_FULL_DUPLEX,
     /*.macConfig = */0U | (uint32)GMAC_MAC_CONFIG_CRC_STRIPPING | (uint32)GMAC_MAC_CONFIG_AUTO_PAD,
-    /*.macPktFilterConfig = */0U | (uint32)GMAC_PKT_FILTER_HASH_OR_PERFECT_FILTER,
+    /*.macPktFilterConfig = */0U | (uint32)GMAC_PKT_FILTER_RECV_ALL | (uint32)GMAC_PKT_FILTER_HASH_OR_PERFECT_FILTER | (uint32)GMAC_PKT_FILTER_PROMISCUOUS_MODE,
     /*.enableCtrl = */FALSE
 };
 

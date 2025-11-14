@@ -144,7 +144,7 @@ const Flexcan_Ip_ConfigType FlexCAN_Config0  = {
 #endif /* (FLEXCAN_IP_FEATURE_HAS_TS_ENABLE == STD_ON) */
     FLEXCAN_NORMAL_MODE,
      /*ctrlOptions*/
-    (uint32)(\
+    (uint32)(FLEXCAN_IP_ISO_U32 | \
     FLEXCAN_IP_BUSOFF_RECOVERY_U32 | \
     \
     0U),
@@ -156,7 +156,7 @@ const Flexcan_Ip_ConfigType FlexCAN_Config0  = {
       FLEXCAN_PAYLOAD_SIZE_8
     },
         /*Can FD enabled .fd_enable*/
-        (boolean)FALSE,
+        (boolean)TRUE,
         /*Enhance CBT support . extCbtEnable*/
         (boolean)FALSE,
         /*BRS for FD .bitRateSwitch*/
@@ -171,17 +171,17 @@ const Flexcan_Ip_ConfigType FlexCAN_Config0  = {
             /* Pre Divider */
             (7U),
             /* Resync jump width */
-            (0U)
+            (4U)
         },
             /*values for FD baudrate .bitrate*/
         {   /* Prop Seg */
-            (7U),
+            (6U),
             /* Phase Seg 1 */
-            (5U),
+            (7U),
             /* Phase Seg 2*/
-            (1U),
-            /* Pre Divider */
             (4U),
+            /* Pre Divider */
+            (1U),
             /* Resync jump width */
             (1U)
         },

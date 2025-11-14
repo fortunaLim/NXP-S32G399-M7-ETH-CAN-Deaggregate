@@ -2,7 +2,7 @@
 --entry=Reset_Handler
 -ggdb3
 -T
-"C:/Users/sh970/workspaceS32DS.3.5/Eth_InternalLoopback_S32G399A_M7/Project_Settings/Linker_Files/linker_ram.ld"
+"C:/Users/sh970/workspace_paper/Eth_InternalLoopback_S32G399A_M7/Project_Settings/Linker_Files/linker_ram.ld"
 -Wl,-Map,"Eth_InternalLoopback_S32G399A_M7.map"
 -mcpu=cortex-m7
 -mthumb
@@ -11,7 +11,6 @@
 -mfpu=fpv5-sp-d16
 -specs=nano.specs
 -specs=nosys.specs
---sysroot="C:/NXP/S32DS.3.5/S32DS/build_tools/gcc_v9.2/gcc-9.2-arm32-eabi/arm-none-eabi/newlib"
 "./Project_Settings/Startup_Code/Vector_Table.o"
 "./Project_Settings/Startup_Code/exceptions.o"
 "./Project_Settings/Startup_Code/nvic.o"
@@ -125,7 +124,6 @@
 "./generate/src/Rtc_Ip_PBcfg.o"
 "./generate/src/Siul2_Port_Ip_PBcfg.o"
 "./generate/src/Stm_Ip_PBcfg.o"
-"./src/Process_Queue.o"
 "./src/main.o"
 -lc
 -lm

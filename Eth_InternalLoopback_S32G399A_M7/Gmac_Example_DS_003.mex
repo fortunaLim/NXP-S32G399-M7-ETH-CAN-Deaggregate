@@ -1288,7 +1288,7 @@
                                     <setting name="0" value="ETH_MAC_LAYER_SPEED_1G"/>
                                  </array>
                                  <array name="EthCtrlPhyAddress">
-                                    <setting name="0" value="00:11:22:33:44:55"/>
+                                    <setting name="0" value="00:11:22:33:44:44"/>
                                  </array>
                                  <array name="EthCtrlEcucPartitionRef"/>
                                  <struct name="EthCtrlVendorSpecific">
@@ -1321,9 +1321,9 @@
                                        <setting name="MAC_CONFIG_DISABLE_RETRY" value="false"/>
                                        <setting name="MAC_CONFIG_DEFERRAL_CHECK_HD" value="false"/>
                                     </struct>
-                                    <struct name="EthCtrlConfigPacketFilter" quick_selection="Default">
+                                    <struct name="EthCtrlConfigPacketFilter">
                                        <setting name="Name" value="EthCtrlConfigPacketFilter"/>
-                                       <setting name="PKT_FILTER_RECV_ALL" value="false"/>
+                                       <setting name="PKT_FILTER_RECV_ALL" value="true"/>
                                        <setting name="PKT_FILTER_HASH_OR_PERFECT_FILTER" value="true"/>
                                        <setting name="PKT_FILTER_BLOCK_CONTROL_PKTS" value="false"/>
                                        <setting name="PKT_FILTER_BLOCK_PAUSE_PKTS" value="false"/>
@@ -1334,7 +1334,7 @@
                                        <setting name="PKT_FILTER_DST_ADDR_INV_FILTER_EN" value="false"/>
                                        <setting name="PKT_FILTER_HASH_MULTICAST" value="false"/>
                                        <setting name="PKT_FILTER_HASH_UNICAST" value="false"/>
-                                       <setting name="PKT_FILTER_PROMISCUOUS_MODE" value="false"/>
+                                       <setting name="PKT_FILTER_PROMISCUOUS_MODE" value="true"/>
                                     </struct>
                                  </struct>
                                  <struct name="EthCtrlConfigEgress">
@@ -1343,7 +1343,7 @@
                                     <array name="EthCtrlConfigEgressFifo">
                                        <struct name="0">
                                           <setting name="Name" value="EthCtrlConfigEgressFifo_0"/>
-                                          <setting name="EthCtrlConfigEgressFifoBufLenByte" value="512"/>
+                                          <setting name="EthCtrlConfigEgressFifoBufLenByte" value="1536"/>
                                           <setting name="EthCtrlConfigEgressFifoBufTotal" value="4"/>
                                           <setting name="EthCtrlConfigEgressFifoIdx" value="0"/>
                                           <setting name="EthCtrlConfigEgressFifoCallback" value="Eth_TxIrqCallback"/>
@@ -1379,8 +1379,8 @@
                                     <array name="EthCtrlConfigIngressFifo">
                                        <struct name="0">
                                           <setting name="Name" value="EthCtrlConfigIngressFifo_0"/>
-                                          <setting name="EthCtrlConfigIngressFifoBufLenByte" value="1456"/>
-                                          <setting name="EthCtrlConfigIngressFifoBufTotal" value="256"/>
+                                          <setting name="EthCtrlConfigIngressFifoBufLenByte" value="1536"/>
+                                          <setting name="EthCtrlConfigIngressFifoBufTotal" value="128"/>
                                           <setting name="EthCtrlConfigIngressFifoIdx" value="0"/>
                                           <setting name="EthCtrlConfigIngressFifoCallback" value="Eth_RxIrqCallback"/>
                                           <array name="EthCtrlConfigIngressFifoPriorityAssignment"/>
@@ -5127,14 +5127,14 @@
                               <setting name="max_num_mb" value="16"/>
                               <setting name="num_id_filters" value="FLEXCAN_RX_FIFO_ID_FILTERS_8"/>
                               <setting name="is_rx_fifo_needed" value="false"/>
-                              <setting name="fd_enable" value="false"/>
+                              <setting name="fd_enable" value="true"/>
                               <setting name="flexcanMode" value="FLEXCAN_NORMAL_MODE"/>
                               <setting name="payload" value="FLEXCAN_PAYLOAD_SIZE_8"/>
                               <setting name="transfer_type" value="FLEXCAN_RXFIFO_USING_INTERRUPTS"/>
                               <setting name="rxFifoDMAChannel" value="0"/>
                               <setting name="extCbtEnable" value="false"/>
                               <setting name="bitRateSwitch" value="false"/>
-                              <setting name="CanControllerFdISO" value="false"/>
+                              <setting name="CanControllerFdISO" value="true"/>
                               <setting name="CanControllerAutoBusOff" value="true"/>
                               <setting name="CanRemoteRequestStore" value="false"/>
                               <setting name="timeStampSurce" value="FLEXCAN_CAN_CLK_TIMESTAMP_SRC"/>
@@ -5147,14 +5147,14 @@
                                  <setting name="flexcan_cfg_phaseSeg1" value="8"/>
                                  <setting name="flexcan_cfg_phaseSeg2" value="5"/>
                                  <setting name="flexcan_cfg_preDivider" value="8"/>
-                                 <setting name="flexcan_cfg_rJumpwidth" value="1"/>
+                                 <setting name="flexcan_cfg_rJumpwidth" value="5"/>
                               </struct>
                               <struct name="flexcan_time_segment_cbt">
                                  <setting name="Name" value="FlexCAN_Ip_TimeSegCBT0"/>
-                                 <setting name="flexcan_cfg_propSeg" value="7"/>
-                                 <setting name="flexcan_cfg_phaseSeg1" value="6"/>
-                                 <setting name="flexcan_cfg_phaseSeg2" value="2"/>
-                                 <setting name="flexcan_cfg_preDivider" value="5"/>
+                                 <setting name="flexcan_cfg_propSeg" value="6"/>
+                                 <setting name="flexcan_cfg_phaseSeg1" value="8"/>
+                                 <setting name="flexcan_cfg_phaseSeg2" value="5"/>
+                                 <setting name="flexcan_cfg_preDivider" value="2"/>
                                  <setting name="flexcan_cfg_rJumpwidth" value="2"/>
                               </struct>
                               <setting name="FlexCanCallback" value="NULL_PTR"/>

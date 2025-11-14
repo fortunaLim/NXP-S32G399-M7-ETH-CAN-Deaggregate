@@ -137,10 +137,10 @@ extern "C"{
 
 /* Maximum number of configured buffers per Rx FIFO */
 #ifndef ETH_MAX_RXBUFF_SUPPORTED
-    #define ETH_MAX_RXBUFF_SUPPORTED        (256U)
-#elif (ETH_MAX_RXBUFF_SUPPORTED < 256)
+    #define ETH_MAX_RXBUFF_SUPPORTED        (128U)
+#elif (ETH_MAX_RXBUFF_SUPPORTED < 128)
     #undef ETH_MAX_RXBUFF_SUPPORTED
-    #define ETH_MAX_RXBUFF_SUPPORTED        (256U)
+    #define ETH_MAX_RXBUFF_SUPPORTED        (128U)
 #endif
 
 /*==================================================================================================

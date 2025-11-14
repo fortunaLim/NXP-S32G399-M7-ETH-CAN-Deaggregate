@@ -53,7 +53,7 @@ extern "C"{
 #define GPT_IPW_SW_MAJOR_VERSION_C             4
 #define GPT_IPW_SW_MINOR_VERSION_C             0
 #define GPT_IPW_SW_PATCH_VERSION_C             2
-#define PIT_IP_USED   (STD_ON)
+
 /*==================================================================================================
 *                                     FILE VERSION CHECKS
 ==================================================================================================*/

@@ -33,7 +33,7 @@ Eth_InternalLoopback_S32G399A_M7.siz \
 all: Eth_InternalLoopback_S32G399A_M7.elf secondary-outputs
 
 # Tool invocations
-Eth_InternalLoopback_S32G399A_M7.elf: $(OBJS) C:/Users/sh970/workspaceS32DS.3.5/Eth_InternalLoopback_S32G399A_M7/Project_Settings/Linker_Files/linker_ram.ld $(USER_OBJS)
+Eth_InternalLoopback_S32G399A_M7.elf: $(OBJS) C:/Users/sh970/workspace_paper/Eth_InternalLoopback_S32G399A_M7/Project_Settings/Linker_Files/linker_ram.ld $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: Standard S32DS C Linker'
 	arm-none-eabi-gcc -o "Eth_InternalLoopback_S32G399A_M7.elf" "@Eth_InternalLoopback_S32G399A_M7.args"  $(USER_OBJS)
